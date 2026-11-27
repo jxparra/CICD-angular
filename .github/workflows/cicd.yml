@@ -1,0 +1,72 @@
+name: Angular CI/CD
+
+# on: eventos que disparan el workflow.
+# - pull_request contra main -> solo CI (tests + compilación), no se publica nada.
+# - push a main (p. ej. al fusionar una PR) -> CI y después CD (despliegue en Pages).
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# jobs: trabajos que se ejecutan, cada uno en una máquina virtual limpia.
+jobs:
+  # build: integración continua. Descarga, instala, prueba y compila el proyecto.
+  build:
+    runs-on: ubuntu-latest
+    # permissions: permisos mínimos del token; build solo necesita leer el repo.
+    permissions:
+      contents: read
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Extensión: tests unitarios con umbrales de cobertura (definidos en angular.json).
+      # Si un test falla o la cobertura no llega al mínimo, el job falla.
+      - name: Ejecutar tests con cobertura
+        run: npx ng test --watch=false --coverage
+
+      - name: Subir informe de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+
+      - name: Compilar Angular
+        run: npx ng build --base-href /cicd-angular/
+
+      # if: solo en push se sube la web compilada como artefacto de Pages (en una PR no se publica).
+      - name: Subir artefacto de Pages
+        if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/cicd-angular/browser
+
+  # deploy: despliegue continuo en GitHub Pages.
+  deploy:
+    # needs: solo se ejecuta si build ha terminado correctamente.
+    needs: build
+    # if: solo en push a main, nunca en pull requests.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # permissions: permisos mínimos para publicar en Pages.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Desplegar en GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
