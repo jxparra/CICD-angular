@@ -1,0 +1,21 @@
+<section class="task-list">
+  <h2>Tareas</h2>
+  <form (submit)="addTask($event, newTask)">
+    <input #newTask type="text" placeholder="Nueva tarea" aria-label="Nueva tarea" />
+    <button type="submit" class="add">Añadir</button>
+  </form>
+  <p class="pending">Pendientes: {{ taskService.pendingCount() }}</p>
+  <ul>
+    @for (task of taskService.tasks(); track task.id) {
+      <li [class.done]="task.done">
+        <label>
+          <input type="checkbox" [checked]="task.done" (change)="taskService.toggle(task.id)" />
+          {{ task.title }}
+        </label>
+        <button type="button" class="remove" (click)="taskService.remove(task.id)">Eliminar</button>
+      </li>
+    } @empty {
+      <li class="empty">No hay tareas</li>
+    }
+  </ul>
+</section>
